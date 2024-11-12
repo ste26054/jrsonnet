@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { WASI } = require('wasi');
 const wasi = new WASI({
+	version: "preview1",
 	args: process.argv,
 	env: process.env,
 	preopens: {},
@@ -11,7 +12,9 @@ class JsonnetVM {
 	constructor(wasm, vm) {
 		this.wasm = wasm;
 		this.vm = vm;
-		this.wasm.exports.jrsonnet_set_trace_format(this.vm, 1);
+
+		// TODO: broken binding
+		// this.wasm.exports.jrsonnet_set_trace_format(this.vm, 1);
 
 		this.setImportCallback((from, to) => {
 			const resolved = path.resolve(from, to);
@@ -39,10 +42,11 @@ class JsonnetVM {
 				return this.allocateString(e.stack)
 			}
 		});
-		this.wasm.exports.jrsonnet_apply_static_import_callback(
-			this.vm,
-			this.vm,
-		);
+		// TODO: broken binding?
+		// this.wasm.exports.jrsonnet_apply_static_import_callback(
+		// 	this.vm,
+		// 	this.vm,
+		// );
 	}
 
 	alloc(length) {
@@ -117,7 +121,14 @@ class JsonnetWASM {
 						throw new Error(`Got unknown ctx callback: ${ctx}`);
 					}
 					return this.importCbs.get(ctx)(base, rel, found_here, success);
-				}
+				},
+				// TODO: Not working?
+				_jrsonnet_static_native_callback: (ctx, argv, success) => {
+					if (!this.importCbs.has(ctx)) {
+						throw new Error(`Got unknown ctx callback: ${ctx}`);
+					}
+					return this.importCbs.get(ctx)(base, argv, success);
+				},
 			}
 		});
 		wasi.start(instance);
@@ -169,13 +180,16 @@ class JsonnetWASM {
 (async () => {
 	try {
 		const jsonnet = new JsonnetWASM();
-		await jsonnet.init(fs.readFileSync(`${__dirname}/../../target/wasm32-wasi/release/jsonnet.wasm`));
+		await jsonnet.init(fs.readFileSync(`${__dirname}/../../target/wasm32-wasi/debug/jsonnet.wasm`));
 		console.log(`Version = ${jsonnet.version()}`);
 
 		const vm = jsonnet.newVM();
 		console.log(vm.evaluateSnippet('./snip.jsonnet', `
 			2+2
 		`));
+
+		// TODO: not working
+		// const testJsonnetPath = path.resolve(__dirname, './test.jsonnet');
 		console.log(vm.evaluateFile('./test.jsonnet'));
 	} catch (e) {
 		console.log(e.stack);

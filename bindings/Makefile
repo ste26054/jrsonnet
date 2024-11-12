@@ -10,8 +10,8 @@ test-c: ./c/libjsonnet_test_file ../target/release/libjsonnet.so
 	ldd ./c/libjsonnet_test_file
 	valgrind --leak-check=full ./c/libjsonnet_test_file test.jsonnet
 
-../target/wasm32-wasi/release/jsonnet.wasm:
-	cd jsonnet && cargo wasi build --release -p libjsonnet && cd ..
+../target/wasm32-wasi/debug/jsonnet.wasm:
+	cd jsonnet && cargo wasi build -p libjsonnet --features interop && cd ..
 
-test-js: ../target/wasm32-wasi/release/jsonnet.wasm
-	node --experimental-wasi-unstable-preview1 --experimental-wasm-bigint js/index
+test-js: ../target/wasm32-wasi/debug/jsonnet.wasm
+	node --experimental-wasi-unstable-preview1 js/index

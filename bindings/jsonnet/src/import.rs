@@ -27,9 +27,8 @@ pub type JsonnetImportCallback = unsafe extern "C" fn(
 	base: *const c_char,
 	rel: *const c_char,
 	found_here: *mut *const c_char,
-	buf: *mut *mut c_char,
-	buflen: *mut usize,
-) -> c_int;
+	success: &mut c_int,
+) -> *mut c_char;
 
 /// Resolves imports using callback
 #[derive(Trace)]
@@ -56,31 +55,22 @@ impl ImportResolver for CallbackImportResolver {
 		let base = unsafe { crate::unparse_path(&base) };
 		let rel = CString::new(path).unwrap();
 		let found_here: *mut c_char = null_mut();
-
-		let mut buf = null_mut();
-		let mut buf_len = 0;
-		let success = unsafe {
+		let mut success: i32 = 0;
+		let result_ptr = unsafe {
 			(self.cb)(
 				self.ctx,
 				base.as_ptr(),
 				rel.as_ptr(),
 				&mut (found_here as *const _),
-				&mut buf,
-				&mut buf_len,
+				&mut success,
 			)
 		};
-		let buf_slice: &[u8] = unsafe { std::slice::from_raw_parts(buf.cast(), buf_len) };
-		unsafe {
-			std::alloc::dealloc(
-				buf.cast(),
-				Layout::from_size_align(buf_len, 1).expect("layout is valid"),
-			);
-		};
-		let buf_intern = buf_slice.to_vec();
-
+		let result_raw = unsafe { CStr::from_ptr(result_ptr) };
+		let result_str = result_raw.to_str().unwrap();
 		assert!(success == 0 || success == 1);
 		if success == 0 {
-			let result = String::from_utf8(buf_intern).expect("error should be valid string");
+			unsafe { CString::from_raw(result_ptr) };
+			let result = result_str.to_owned();
 			bail!(ImportCallbackError(result));
 		}
 
@@ -94,7 +84,8 @@ impl ImportResolver for CallbackImportResolver {
 
 		let mut out = self.out.borrow_mut();
 		if !out.contains_key(&found_here_buf) {
-			out.insert(found_here_buf.clone(), buf_intern);
+			out.insert(found_here_buf.clone(), result_str.into());
+			unsafe { CString::from_raw(result_ptr) };
 		}
 
 		Ok(found_here_buf)

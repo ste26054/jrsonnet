@@ -7,7 +7,7 @@ use std::{
 
 use jrsonnet_evaluator::Val;
 
-use crate::{import::jsonnet_import_callback, native::jsonnet_native_callback};
+use crate::{import::jsonnet_import_callback, native::jsonnet_native_callback, VM};
 
 extern "C" {
 	pub fn _jrsonnet_static_import_callback(
@@ -16,7 +16,7 @@ extern "C" {
 		rel: *const c_char,
 		found_here: *mut *const c_char,
 		success: &mut c_int,
-	) -> *const c_char;
+	) -> *mut c_char;
 
 	#[allow(improper_ctypes)]
 	pub fn _jrsonnet_static_native_callback(
@@ -28,8 +28,13 @@ extern "C" {
 
 /// # Safety
 #[no_mangle]
-pub unsafe extern "C" fn jrsonnet_apply_static_import_callback(vm: &VM, ctx: *mut c_void) {
-	jsonnet_import_callback(vm, _jrsonnet_static_import_callback, ctx)
+pub unsafe extern "C" fn jrsonnet_apply_static_import_callback(
+	vm: &VM,
+	ctx: *mut c_void
+) {
+	unsafe {
+		jsonnet_import_callback(vm, _jrsonnet_static_import_callback, ctx)
+	}
 }
 
 /// # Safety
@@ -40,14 +45,18 @@ pub unsafe extern "C" fn jrsonnet_apply_static_native_callback(
 	ctx: *mut c_void,
 	raw_params: *const *const c_char,
 ) {
-	jsonnet_native_callback(vm, name, _jrsonnet_static_native_callback, ctx, raw_params)
-}
-
-#[no_mangle]
-pub extern "C" fn jrsonnet_set_trace_format(vm: &VM, format: u8) {
-	use jrsonnet_evaluator::trace::JsFormat;
-	match format {
-		1 => vm.set_trace_format(Box::new(JsFormat)),
-		_ => panic!("unknown trace format"),
+	unsafe {
+		jsonnet_native_callback(vm, name, _jrsonnet_static_native_callback, ctx, raw_params)
 	}
 }
+
+// use crate::VM;
+
+// #[no_mangle]
+// use jrsonnet_evaluator::trace::JsFormat;
+// pub extern "C" fn jrsonnet_set_trace_format(vm: &VM, format: u8) {
+// 	match format {
+// 		1 => vm.trace_format(Box::new(JsFormat { max_trace: 5 })),
+// 		_ => panic!("unknown trace format"),
+// 	}
+// }
