@@ -677,8 +677,6 @@ dependencies = [
 [[package]]
 name = "jrsonnet-gcmodule"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c33f4f6cdc60f5ae94ebae3dfe7f484ae79b364225d9b19601b24c804cfd8751"
 dependencies = [
  "jrsonnet-gcmodule-derive",
 ]
@@ -686,8 +684,6 @@ dependencies = [
 [[package]]
 name = "jrsonnet-gcmodule-derive"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b30c95b285f9bb6709f1b3e6fc69b3a25e39b32ff987587fd108f0f22be5fa3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -766,6 +762,20 @@ version = "0.5.0-pre97"
 dependencies = [
  "jrsonnet-gcmodule",
  "peg",
+]
+
+[[package]]
+name = "jrsonnet-wasm"
+version = "0.5.0-pre97"
+dependencies = [
+ "jrsonnet-evaluator",
+ "jrsonnet-gcmodule",
+ "jrsonnet-interner",
+ "jrsonnet-parser",
+ "jrsonnet-stdlib",
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -1596,12 +1606,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "web-sys"
+version = "0.3.85"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "312e32e551d92129218ea9a2452120f4aabc03529ef03e4d0d82fb2780608598"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "winapi-util"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

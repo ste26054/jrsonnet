@@ -391,6 +391,7 @@ impl Span {
 	}
 }
 
+#[cfg(target_pointer_width = "64")]
 static_assertions::assert_eq_size!(Span, (usize, usize));
 
 impl Debug for Span {

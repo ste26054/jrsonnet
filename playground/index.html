@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jrsonnet Playground</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #1e1e2e;
+      --surface: #181825;
+      --border: #313244;
+      --text: #cdd6f4;
+      --subtext: #a6adc8;
+      --accent: #89b4fa;
+      --green: #a6e3a1;
+      --red: #f38ba8;
+      --yellow: #f9e2af;
+      --header-h: 48px;
+      --gutter: 6px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header */
+    header {
+      height: var(--header-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    header .version {
+      font-size: 12px;
+      color: var(--subtext);
+    }
+    header .spacer { flex: 1; }
+    header select, header button {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    header button:hover {
+      border-color: var(--accent);
+    }
+    header button.run {
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      font-weight: 600;
+      padding: 6px 16px;
+    }
+    header button.run:hover {
+      opacity: 0.9;
+    }
+    .status {
+      font-size: 12px;
+      color: var(--subtext);
+    }
+    .status.loading { color: var(--yellow); }
+    .status.ready { color: var(--green); }
+    .status.error { color: var(--red); }
+
+    /* Main layout */
+    .main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* Panels */
+    .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel-header {
+      height: 32px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--subtext);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+    .panel-body {
+      flex: 1;
+      overflow: auto;
+    }
+
+    /* Gutter (resize handle) */
+    .gutter {
+      width: var(--gutter);
+      background: var(--border);
+      cursor: col-resize;
+      flex-shrink: 0;
+    }
+    .gutter:hover {
+      background: var(--accent);
+    }
+
+    /* Output */
+    #output {
+      padding: 12px;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #output.error {
+      color: var(--red);
+    }
+    #output.success {
+      color: var(--green);
+    }
+
+    /* CodeMirror overrides */
+    .cm-editor {
+      height: 100%;
+      font-size: 14px;
+    }
+    .cm-editor .cm-scroller {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+    .cm-editor.cm-focused { outline: none; }
+
+    /* Timing */
+    .timing {
+      font-size: 11px;
+      color: var(--subtext);
+      margin-left: auto;
+      font-weight: normal;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>jrsonnet</h1>
+    <span class="version" id="version-label">loading...</span>
+    <div class="spacer"></div>
+    <select id="examples">
+      <option value="">Examples...</option>
+      <option value="hello">Hello World</option>
+      <option value="functions">Functions</option>
+      <option value="objects">Object Composition</option>
+      <option value="stdlib">Standard Library</option>
+      <option value="imports">Imports</option>
+      <optgroup label="With Libraries (simple)">
+        <option value="simpleImport">Simple Import</option>
+        <option value="transitiveImport">Transitive Import</option>
+      </optgroup>
+      <optgroup label="With Libraries (advanced)">
+        <option value="kubernetes">Kubernetes</option>
+        <option value="configMgmt">Config Management</option>
+        <option value="utilities">Utility Functions</option>
+        <option value="monitoringStack">Monitoring Stack</option>
+      </optgroup>
+    </select>
+    <button class="run" id="run-btn" disabled>Run (Ctrl+Enter)</button>
+    <span class="status loading" id="status">Loading WASM...</span>
+  </header>
+
+  <div class="main">
+    <div class="panel" id="editor-panel">
+      <div class="panel-header">Input</div>
+      <div class="panel-body" id="editor-container"></div>
+    </div>
+    <div class="gutter" id="gutter"></div>
+    <div class="panel" id="output-panel">
+      <div class="panel-header">
+        Output
+        <span class="timing" id="timing"></span>
+      </div>
+      <div class="panel-body">
+        <div id="output">Press Ctrl+Enter or click Run to evaluate.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CodeMirror 6 from esm.sh — no version pinning, let esm.sh resolve compatible versions -->
+  <script type="module">
+    // Load CodeMirror modules — let esm.sh resolve compatible versions.
+    let EditorView, keymap, EditorState, basicSetup, json, oneDark;
+    let useCodeMirror = false;
+    try {
+      ([
+        { EditorView, keymap },
+        { EditorState },
+        { basicSetup },
+        { json },
+        { oneDark },
+      ] = await Promise.all([
+        import("https://esm.sh/@codemirror/view"),
+        import("https://esm.sh/@codemirror/state"),
+        import("https://esm.sh/codemirror"),
+        import("https://esm.sh/@codemirror/lang-json"),
+        import("https://esm.sh/@codemirror/theme-one-dark"),
+      ]));
+      useCodeMirror = true;
+    } catch (e) {
+      console.warn("CodeMirror failed to load, using textarea fallback:", e);
+    }
+
+    // ---------------------------------------------------------------
+    // Examples
+    // ---------------------------------------------------------------
+    const EXAMPLES = {
+      hello: `// Hello World in Jsonnet
+{
+  greeting: "Hello",
+  target: "world",
+  message: self.greeting + ", " + self.target + "!",
+}`,
+      functions: `// Functions and local variables
+local fibonacci(n) =
+  if n <= 1 then n
+  else fibonacci(n - 1) + fibonacci(n - 2);
+
+{
+  fib_10: fibonacci(10),
+  squares: [x * x for x in std.range(1, 10)],
+}`,
+      objects: `// Object composition with inheritance
+local Base = {
+  name: "unnamed",
+  greeting: "Hello, " + self.name + "!",
+};
+
+local Alice = Base { name: "Alice" };
+local Bob = Base { name: "Bob" };
+
+{
+  alice: Alice,
+  bob: Bob,
+}`,
+      stdlib: `// Standard library functions
+{
+  string_ops: {
+    upper: std.asciiUpper("hello"),
+    split: std.split("a,b,c", ","),
+    length: std.length("hello world"),
+  },
+  array_ops: {
+    sorted: std.sort([3, 1, 4, 1, 5]),
+    filtered: std.filter(function(x) x > 2, [1, 2, 3, 4, 5]),
+    mapped: std.map(function(x) x * 2, [1, 2, 3]),
+  },
+  math: {
+    pow: std.pow(2, 10),
+    floor: std.floor(3.14),
+    sqrt: std.sqrt(144),
+  },
+}`,
+      imports: `// Imports (virtual files)
+// Register files with vm.add_file() in JavaScript.
+// This example uses inline data.
+local data = {
+  users: [
+    { name: "Alice", role: "admin" },
+    { name: "Bob", role: "user" },
+  ],
+};
+
+{
+  admins: std.filter(
+    function(u) u.role == "admin",
+    data.users,
+  ),
+  user_names: std.map(
+    function(u) u.name,
+    data.users,
+  ),
+}`,
+      simpleImport: `// Simple import of a libsonnet file
+local greeter = import "greeter.libsonnet";
+
+{
+  a: greeter.hello("Alice"),
+  b: greeter.goodbye("Bob"),
+}`,
+      transitiveImport: `// Transitive import: this file → fancy_greeter → greeter
+// fancy_greeter.libsonnet internally imports greeter.libsonnet
+local fancy = import "fancy_greeter.libsonnet";
+
+{
+  message: fancy.fancy("World"),
+  card: fancy.card("Alice"),
+}`,
+      kubernetes: `// Kubernetes manifests using an imported library
+// The kubernetes.libsonnet file is fetched and loaded automatically.
+local k8s = import "kubernetes.libsonnet";
+
+// Define a web application stack
+local app = k8s.microservice(
+  "web-app",
+  "nginx:1.25-alpine",
+  replicas=3,
+  port=8080,
+);
+
+// Add a separate API backend
+local api = k8s.microservice(
+  "api-server",
+  "node:20-slim",
+  replicas=2,
+  port=3000,
+);
+
+{
+  "web-app": app,
+  "api-server": api,
+}`,
+      configMgmt: `// Config management using imported libraries
+local config = import "config.libsonnet";
+local utils = import "utils.libsonnet";
+
+// Generate configs for all environments
+local allEnvs = {
+  [env]: config.forEnv(env)
+  for env in ["dev", "staging", "production"]
+};
+
+// Deep merge a custom override for production
+local prodOverride = {
+  app: {
+    replicas: 10,
+    logging: { level: "error", structured: true },
+  },
+  features: { rateLimiting: true },
+};
+
+{
+  environments: allEnvs,
+  production_custom: utils.deepMerge(
+    allEnvs.production,
+    prodOverride,
+  ),
+}`,
+      utilities: `// Utility library demo
+local utils = import "utils.libsonnet";
+
+local users = [
+  { id: "alice", name: "Alice", role: "admin" },
+  { id: "bob", name: "Bob", role: "user" },
+  { id: "carol", name: "Carol", role: "admin" },
+];
+
+{
+  // Create a lookup table by user id
+  userLookup: utils.keyBy(users, "id"),
+
+  // Use the template function
+  greeting: utils.template(
+    "Hello {name}, your role is {role}!",
+    { name: "Alice", role: "admin" },
+  ),
+
+  // Compact removes nulls
+  cleaned: utils.compact({
+    name: "Alice",
+    email: null,
+    role: "admin",
+    phone: null,
+  }),
+
+  // Capitalize names
+  names: std.map(
+    function(u) utils.capitalize(u.name),
+    users,
+  ),
+}`,
+      monitoringStack: `// Transitive imports: playground → monitoring → kubernetes
+// monitoring.libsonnet internally imports kubernetes.libsonnet
+local monitoring = import "monitoring.libsonnet";
+
+// Deploy a full monitoring stack
+local stack = monitoring.stack(
+  namespace="observability",
+  prometheusReplicas=2,
+);
+
+// Also create a standalone Grafana in a different namespace
+local extraGrafana = monitoring.grafana("dashboards");
+
+{
+  stack: stack,
+  extra_grafana: extraGrafana,
+}`,
+    };
+
+    // ---------------------------------------------------------------
+    // Editor setup (CodeMirror or textarea fallback)
+    // ---------------------------------------------------------------
+    const editorContainer = document.getElementById("editor-container");
+    let editor;
+
+    // Unified interface: getCode() and setCode() work with both editors
+    let getCode, setCode;
+
+    if (useCodeMirror) {
+      const runExtension = keymap.of([{
+        key: "Ctrl-Enter",
+        mac: "Cmd-Enter",
+        run: () => { evaluate(); return true; },
+      }]);
+
+      editor = new EditorView({
+        state: EditorState.create({
+          doc: EXAMPLES.hello,
+          extensions: [basicSetup, json(), oneDark, runExtension],
+        }),
+        parent: editorContainer,
+      });
+      getCode = () => editor.state.doc.toString();
+      setCode = (code) => editor.dispatch({
+        changes: { from: 0, to: editor.state.doc.length, insert: code },
+      });
+    } else {
+      // Textarea fallback
+      const ta = document.createElement("textarea");
+      ta.id = "editor-textarea";
+      ta.style.cssText = "width:100%;height:100%;background:var(--bg);color:var(--text);border:none;padding:12px;font-family:'SF Mono','Fira Code',monospace;font-size:14px;resize:none;outline:none;";
+      ta.value = EXAMPLES.hello;
+      ta.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+          e.preventDefault();
+          evaluate();
+        }
+      });
+      editorContainer.appendChild(ta);
+      getCode = () => ta.value;
+      setCode = (code) => { ta.value = code; };
+    }
+
+    // ---------------------------------------------------------------
+    // Example selector
+    // ---------------------------------------------------------------
+    document.getElementById("examples").addEventListener("change", (e) => {
+      const example = EXAMPLES[e.target.value];
+      if (example) {
+        setCode(example);
+      }
+      e.target.value = "";
+    });
+
+    // ---------------------------------------------------------------
+    // Resize gutter
+    // ---------------------------------------------------------------
+    const gutter = document.getElementById("gutter");
+    const editorPanel = document.getElementById("editor-panel");
+    const outputPanel = document.getElementById("output-panel");
+
+    let isResizing = false;
+    gutter.addEventListener("mousedown", (e) => {
+      isResizing = true;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      e.preventDefault();
+    });
+    document.addEventListener("mousemove", (e) => {
+      if (!isResizing) return;
+      const container = document.querySelector(".main");
+      const rect = container.getBoundingClientRect();
+      const ratio = (e.clientX - rect.left) / rect.width;
+      const clamped = Math.max(0.2, Math.min(0.8, ratio));
+      editorPanel.style.flex = `${clamped}`;
+      outputPanel.style.flex = `${1 - clamped}`;
+    });
+    document.addEventListener("mouseup", () => {
+      isResizing = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    });
+
+    // ---------------------------------------------------------------
+    // WASM loading and evaluation
+    // ---------------------------------------------------------------
+    const statusEl = document.getElementById("status");
+    const outputEl = document.getElementById("output");
+    const timingEl = document.getElementById("timing");
+    const runBtn = document.getElementById("run-btn");
+    const versionLabel = document.getElementById("version-label");
+
+    let vm = null;
+
+    // ---------------------------------------------------------------
+    // Library files — fetched from libs/ and registered as virtual files
+    // ---------------------------------------------------------------
+    const LIBS = [
+      "greeter.libsonnet",
+      "fancy_greeter.libsonnet",
+      "utils.libsonnet",
+      "kubernetes.libsonnet",
+      "config.libsonnet",
+      "monitoring.libsonnet",
+    ];
+
+    async function fetchLibs() {
+      const results = await Promise.allSettled(
+        LIBS.map(async (name) => {
+          const resp = await fetch(`libs/${name}`);
+          if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+          return { name, contents: await resp.text() };
+        })
+      );
+      const loaded = [];
+      for (const r of results) {
+        if (r.status === "fulfilled") loaded.push(r.value);
+        else console.warn("Failed to fetch lib:", r.reason);
+      }
+      return loaded;
+    }
+
+    async function initWasm() {
+      try {
+        // Fetch WASM bindings and library files in parallel
+        const [wasm, libs] = await Promise.all([
+          import("../crates/jrsonnet-wasm/pkg/jrsonnet_wasm.js").then(async (mod) => {
+            await mod.default();
+            return mod;
+          }),
+          fetchLibs(),
+        ]);
+
+        vm = new wasm.Jrsonnet();
+        versionLabel.textContent = `v${wasm.version()}`;
+
+        // Register all fetched libraries as virtual files
+        for (const lib of libs) {
+          vm.add_file(lib.name, lib.contents);
+        }
+        if (libs.length > 0) {
+          console.log(`Loaded ${libs.length} libraries: ${libs.map(l => l.name).join(", ")}`);
+        }
+
+        statusEl.textContent = "Ready";
+        statusEl.className = "status ready";
+        runBtn.disabled = false;
+      } catch (e) {
+        statusEl.textContent = "Failed to load";
+        statusEl.className = "status error";
+        outputEl.textContent = `Failed to load WASM:\n${e.message || e}`;
+        outputEl.className = "error";
+        console.error("WASM init failed:", e);
+      }
+    }
+
+    function evaluate() {
+      if (!vm) return;
+
+      const code = getCode();
+      const start = performance.now();
+
+      try {
+        const result = vm.evaluate_snippet("playground.jsonnet", code);
+        const elapsed = (performance.now() - start).toFixed(1);
+
+        outputEl.textContent = result;
+        outputEl.className = "success";
+        timingEl.textContent = `${elapsed}ms`;
+      } catch (e) {
+        const elapsed = (performance.now() - start).toFixed(1);
+        const msg = typeof e === "string" ? e : (e.message || String(e));
+
+        outputEl.textContent = msg;
+        outputEl.className = "error";
+        timingEl.textContent = `${elapsed}ms`;
+      }
+    }
+
+    runBtn.addEventListener("click", evaluate);
+    initWasm();
+  </script>
+</body>
+</html>
