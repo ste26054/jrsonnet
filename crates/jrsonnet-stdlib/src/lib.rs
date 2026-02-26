@@ -379,6 +379,29 @@ impl ContextInitializer {
 			.insert(name.into(), TlaArg::InlineCode(code.as_ref().to_owned()));
 		Ok(())
 	}
+	/// Parse a JSON string and store the resulting value as an external variable.
+	///
+	/// This bypasses the Jsonnet parser entirely — the JSON is parsed via
+	/// serde_json directly into a `Val` tree and stored as `TlaArg::Val`.
+	/// Accessing it via `std.extVar(name)` returns the value in O(1).
+	///
+	/// Includes a recursion depth limit (128 levels) to prevent stack overflow
+	/// on deeply nested input.
+	pub fn add_ext_json(&self, name: IStr, json: &str) -> Result<()> {
+		use jrsonnet_evaluator::integrations::serde::DepthLimitedVal;
+		use serde::de::DeserializeSeed;
+
+		let mut de = serde_json::Deserializer::from_str(json);
+		let val = DepthLimitedVal::new()
+			.deserialize(&mut de)
+			.map_err(|e| jrsonnet_evaluator::runtime_error!("failed to parse json: {e}"))?;
+		de.end()
+			.map_err(|e| jrsonnet_evaluator::runtime_error!("trailing data in json: {e}"))?;
+		self.settings_mut()
+			.ext_vars
+			.insert(name, TlaArg::Val(val));
+		Ok(())
+	}
 	pub fn add_native(&self, name: impl Into<IStr>, cb: impl Into<FuncVal>) {
 		self.settings_mut()
 			.ext_natives

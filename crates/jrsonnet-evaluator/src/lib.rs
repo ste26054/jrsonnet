@@ -13,7 +13,7 @@ mod evaluate;
 pub mod function;
 pub mod gc;
 mod import;
-mod integrations;
+pub mod integrations;
 pub mod manifest;
 mod map;
 mod obj;
@@ -418,6 +418,17 @@ impl State {
 impl State {
 	fn file_cache(&self) -> RefMut<'_, FxHashMap<SourcePath, FileData>> {
 		self.0.file_cache.borrow_mut()
+	}
+
+	/// Clear all cached evaluation results from imported files.
+	///
+	/// This preserves file contents and parsed ASTs but forces re-evaluation
+	/// on the next import. Call this when external variables change, since
+	/// cached results may depend on stale ext var values.
+	pub fn clear_evaluated_cache(&self) {
+		for file in self.0.file_cache.borrow_mut().values_mut() {
+			file.evaluated = None;
+		}
 	}
 }
 /// Executes code creating a new stack frame, to be replaced with try{}

@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html><body>
+<script type="module">
+import init, { Jrsonnet } from "../../crates/jrsonnet-wasm/pkg/jrsonnet_wasm.js";
+await init();
+window.Jrsonnet = Jrsonnet;
+window.wasmReady = true;
+</script>
+</body></html>

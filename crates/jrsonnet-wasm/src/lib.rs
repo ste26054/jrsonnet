@@ -4,10 +4,10 @@ use jrsonnet_evaluator::{
 	error::ErrorKind,
 	manifest::{JsonFormat, ManifestFormat},
 	trace::PathResolver,
-	AsPathLike, ImportResolver, ResolvePathOwned, ResolvePath, State, Val,
+	AsPathLike, ImportResolver, ResolvePathOwned, ResolvePath, State, Val, STATE,
 };
 use jrsonnet_gcmodule::Acyclic;
-use jrsonnet_parser::{SourcePath, SourcePathT};
+use jrsonnet_parser::{SourceFifo, SourcePath, SourcePathT};
 use wasm_bindgen::prelude::*;
 
 // ---------------------------------------------------------------------------
@@ -102,9 +102,14 @@ impl ImportResolver for WasmImportResolver {
 		&self,
 		resolved: &SourcePath,
 	) -> jrsonnet_evaluator::error::Result<Vec<u8>> {
-		let wasm_path = resolved
-			.downcast_ref::<WasmSourceFile>()
-			.expect("WasmImportResolver only produces WasmSourceFile paths");
+		// SourceFifo paths carry their content inline (used by ext_code).
+		if let Some(fifo) = resolved.downcast_ref::<SourceFifo>() {
+			return Ok(fifo.1.to_vec());
+		}
+
+		let Some(wasm_path) = resolved.downcast_ref::<WasmSourceFile>() else {
+			return Err(ErrorKind::ResolvedFileNotFound(resolved.clone()).into());
+		};
 		let path_str = &wasm_path.0;
 
 		// Check virtual files first.
@@ -234,12 +239,56 @@ impl Jrsonnet {
 			.map_err(|e| JsValue::from_str(&format_error(&e)))
 	}
 
+	/// Set an external variable from a JSON string.
+	///
+	/// The JSON is parsed eagerly via serde_json into a Val tree and stored
+	/// directly — bypassing the Jsonnet parser entirely. Accessing it via
+	/// `std.extVar("key")` returns the value in O(1).
+	///
+	/// Returns a proper `js_sys::Error` on invalid JSON (with line/column info),
+	/// oversized input (>5MB), or deeply nested input (>128 levels).
+	pub fn ext_json(&self, key: &str, json: &str) -> Result<(), JsValue> {
+		const MAX_JSON_SIZE: usize = 5_000_000;
+		if json.len() > MAX_JSON_SIZE {
+			return Err(js_sys::Error::new(&format!(
+				"JSON input too large: {} bytes (max {})",
+				json.len(),
+				MAX_JSON_SIZE
+			))
+			.into());
+		}
+		self.context_initializer
+			.add_ext_json(key.into(), json)
+			.map_err(|e| js_sys::Error::new(&format_error(&e)).into())
+	}
+
+	/// Run an explicit garbage collection cycle.
+	///
+	/// jrsonnet-gcmodule has no automatic collection trigger. Call this after
+	/// each evaluation cycle to prevent the GC-tracked object list from growing
+	/// unboundedly.
+	pub fn gc_collect(&self) {
+		jrsonnet_gcmodule::collect_thread_cycles();
+	}
+
 	/// Evaluate a Jsonnet snippet and return the JSON output.
 	///
 	/// All imports must be resolvable via:
 	/// 1. Virtual files registered with `add_file()`
 	/// 2. The synchronous import callback set with `set_import_callback()`
+	///
+	/// Automatically clears the import evaluation cache before each run so
+	/// that changes to external variables are reflected in imported files.
 	pub fn evaluate_snippet(&self, filename: &str, code: &str) -> Result<String, JsValue> {
+		// Clear any stale state left behind by a previous WASM trap (panic=abort
+		// skips Drop, so StateEnterGuard may never clear the thread-local).
+		STATE.with_borrow_mut(|v| *v = None);
+
+		// Invalidate cached evaluation results from prior runs. File contents
+		// and parsed ASTs are preserved, but evaluated values are cleared so
+		// that imports re-execute with the current ext var bindings.
+		self.state.clear_evaluated_cache();
+
 		let _guard = self.state.enter();
 		let val = self
 			.state

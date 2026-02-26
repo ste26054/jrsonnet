@@ -69,13 +69,25 @@ impl<'de> Deserialize<'de> for Val {
 			where
 				E: de::Error,
 			{
-				Ok(Val::Num(NumValue::new(v as f64).expect("no overflow")))
+				let f = v as f64;
+				if f as i64 != v {
+					return Err(E::custom("integer exceeds safe f64 precision"));
+				}
+				Ok(Val::Num(
+					NumValue::new(f).ok_or_else(|| E::custom("non-finite number"))?,
+				))
 			}
 			fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
 			where
 				E: de::Error,
 			{
-				Ok(Val::Num(NumValue::new(v as f64).expect("no overflow")))
+				let f = v as f64;
+				if f as u64 != v {
+					return Err(E::custom("integer exceeds safe f64 precision"));
+				}
+				Ok(Val::Num(
+					NumValue::new(f).ok_or_else(|| E::custom("non-finite number"))?,
+				))
 			}
 
 			fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
@@ -146,6 +158,143 @@ impl<'de> Deserialize<'de> for Val {
 			}
 		}
 		deserializer.deserialize_any(ValVisitor)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Depth-limited JSON deserialization (DeserializeSeed pattern)
+// ---------------------------------------------------------------------------
+
+/// Maximum nesting depth for depth-limited Val deserialization.
+/// Matches serde_json's built-in limit for `serde_json::Value`.
+pub const DEFAULT_RECURSION_LIMIT: usize = 128;
+
+/// A `DeserializeSeed` that deserializes JSON into `Val` with a recursion
+/// depth limit. The standard `Deserialize` impl for `Val` has no depth guard,
+/// which can cause stack overflows on deeply nested input.
+///
+/// Usage (with serde_json):
+/// ```ignore
+/// let mut de = serde_json::Deserializer::from_str(json);
+/// let val = DepthLimitedVal::new().deserialize(&mut de)?;
+/// de.end()?;
+/// ```
+pub struct DepthLimitedVal {
+	depth: usize,
+}
+
+impl DepthLimitedVal {
+	pub fn new() -> Self {
+		Self { depth: 0 }
+	}
+}
+
+impl<'de> serde::de::DeserializeSeed<'de> for DepthLimitedVal {
+	type Value = Val;
+
+	fn deserialize<D>(self, deserializer: D) -> Result<Val, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		deserializer.deserialize_any(DepthLimitedValVisitor { depth: self.depth })
+	}
+}
+
+struct DepthLimitedValVisitor {
+	depth: usize,
+}
+
+impl<'de> Visitor<'de> for DepthLimitedValVisitor {
+	type Value = Val;
+
+	fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(formatter, "any valid jsonnet value")
+	}
+
+	fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
+		Ok(Val::Bool(v))
+	}
+
+	fn visit_f64<E: de::Error>(self, v: f64) -> Result<Self::Value, E> {
+		Ok(Val::Num(NumValue::new(v).ok_or_else(|| {
+			E::custom("only finite numbers are supported")
+		})?))
+	}
+
+	fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+		Ok(Val::string(v))
+	}
+
+	fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> {
+		let f = v as f64;
+		if f as i64 != v {
+			return Err(E::custom("integer exceeds safe f64 precision"));
+		}
+		Ok(Val::Num(
+			NumValue::new(f).ok_or_else(|| E::custom("non-finite number"))?,
+		))
+	}
+
+	fn visit_u64<E: de::Error>(self, v: u64) -> Result<Self::Value, E> {
+		let f = v as f64;
+		if f as u64 != v {
+			return Err(E::custom("integer exceeds safe f64 precision"));
+		}
+		Ok(Val::Num(
+			NumValue::new(f).ok_or_else(|| E::custom("non-finite number"))?,
+		))
+	}
+
+	fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+		Ok(Val::Arr(ArrValue::bytes(v.into())))
+	}
+
+	fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+		Ok(Val::Null)
+	}
+
+	fn visit_some<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+		deserializer.deserialize_any(self)
+	}
+
+	fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+		Ok(Val::Null)
+	}
+
+	fn visit_newtype_struct<D: serde::Deserializer<'de>>(
+		self,
+		deserializer: D,
+	) -> Result<Self::Value, D::Error> {
+		deserializer.deserialize_any(self)
+	}
+
+	fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+		if self.depth >= DEFAULT_RECURSION_LIMIT {
+			return Err(de::Error::custom("recursion limit exceeded"));
+		}
+		let mut out = seq.size_hint().map_or_else(Vec::new, Vec::with_capacity);
+		while let Some(val) = seq.next_element_seed(DepthLimitedVal {
+			depth: self.depth + 1,
+		})? {
+			out.push(val);
+		}
+		Ok(Val::Arr(ArrValue::eager(out)))
+	}
+
+	fn visit_map<A: de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+		if self.depth >= DEFAULT_RECURSION_LIMIT {
+			return Err(de::Error::custom("recursion limit exceeded"));
+		}
+		let mut out = map
+			.size_hint()
+			.map_or_else(ObjValueBuilder::new, ObjValueBuilder::with_capacity);
+		while let Some(k) = map.next_key::<std::borrow::Cow<'de, str>>()? {
+			let v = map.next_value_seed(DepthLimitedVal {
+				depth: self.depth + 1,
+			})?;
+			out.field(k).value(v);
+		}
+		Ok(Val::Obj(out.build()))
 	}
 }
 

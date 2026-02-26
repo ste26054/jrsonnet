@@ -106,6 +106,31 @@ test.describe("Evaluation", () => {
     expect(text).toContain('"user_names"');
   });
 
+  test("ext_var example injects string variables", async ({ page }) => {
+    await page.selectOption("#examples", "extVar");
+    await page.click("#run-btn");
+
+    const output = page.locator("#output");
+    await expect(output).toHaveClass(/success/);
+    const text = await output.textContent();
+    expect(text).toContain('"Alice"');
+    expect(text).toContain('"production"');
+    expect(text).toContain("Hello Alice from production!");
+  });
+
+  test("ext_code example injects Jsonnet expressions", async ({ page }) => {
+    await page.selectOption("#examples", "extCode");
+    await page.click("#run-btn");
+
+    const output = page.locator("#output");
+    await expect(output).toHaveClass(/success/);
+    const text = await output.textContent();
+    expect(text).toContain('"eu-west-1"');
+    expect(text).toContain("6"); // 3 * 2 (ha=true doubles replicas)
+    expect(text).toContain('"logging"');
+    expect(text).toContain('"metrics"');
+  });
+
   test("simple import example", async ({ page }) => {
     await page.selectOption("#examples", "simpleImport");
     await page.click("#run-btn");

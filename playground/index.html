@@ -175,6 +175,10 @@
       <option value="objects">Object Composition</option>
       <option value="stdlib">Standard Library</option>
       <option value="imports">Imports</option>
+      <optgroup label="External Variables">
+        <option value="extVar">ext_var (string)</option>
+        <option value="extCode">ext_code (Jsonnet)</option>
+      </optgroup>
       <optgroup label="With Libraries (simple)">
         <option value="simpleImport">Simple Import</option>
         <option value="transitiveImport">Transitive Import</option>
@@ -234,6 +238,8 @@
     // ---------------------------------------------------------------
     // Examples
     // ---------------------------------------------------------------
+    // Each example is either a code string, or { code, setup(vm) } where
+    // setup configures ext_var / ext_code before evaluation.
     const EXAMPLES = {
       hello: `// Hello World in Jsonnet
 {
@@ -301,6 +307,40 @@ local data = {
     data.users,
   ),
 }`,
+      extVar: {
+        code: `// External string variables (ext_var)
+// These are injected from JavaScript via vm.ext_var()
+// before evaluation — see the setup below.
+{
+  user: std.extVar("username"),
+  env: std.extVar("environment"),
+  message: "Hello " + std.extVar("username")
+           + " from " + std.extVar("environment") + "!",
+}`,
+        setup(vm) {
+          vm.ext_var("username", "Alice");
+          vm.ext_var("environment", "production");
+        },
+      },
+      extCode: {
+        code: `// External Jsonnet code (ext_code)
+// Unlike ext_var (strings), ext_code injects evaluated Jsonnet
+// expressions — objects, arrays, booleans, numbers, etc.
+local settings = std.extVar("settings");
+local features = std.extVar("features");
+
+{
+  replicas: if settings.ha then settings.replicas * 2
+            else settings.replicas,
+  region: settings.region,
+  enabled_features: [f for f in std.objectFields(features)
+                     if features[f]],
+}`,
+        setup(vm) {
+          vm.ext_code("settings", '{ region: "eu-west-1", replicas: 3, ha: true }');
+          vm.ext_code("features", '{ logging: true, metrics: true, tracing: false }');
+        },
+      },
       simpleImport: `// Simple import of a libsonnet file
 local greeter = import "greeter.libsonnet";
 
@@ -418,6 +458,11 @@ local extraGrafana = monitoring.grafana("dashboards");
 }`,
     };
 
+    // Helper: extract code string from an example (string or {code, setup}).
+    function exampleCode(ex) {
+      return typeof ex === "string" ? ex : ex.code;
+    }
+
     // ---------------------------------------------------------------
     // Editor setup (CodeMirror or textarea fallback)
     // ---------------------------------------------------------------
@@ -436,7 +481,7 @@ local extraGrafana = monitoring.grafana("dashboards");
 
       editor = new EditorView({
         state: EditorState.create({
-          doc: EXAMPLES.hello,
+          doc: exampleCode(EXAMPLES.hello),
           extensions: [basicSetup, json(), oneDark, runExtension],
         }),
         parent: editorContainer,
@@ -450,7 +495,7 @@ local extraGrafana = monitoring.grafana("dashboards");
       const ta = document.createElement("textarea");
       ta.id = "editor-textarea";
       ta.style.cssText = "width:100%;height:100%;background:var(--bg);color:var(--text);border:none;padding:12px;font-family:'SF Mono','Fira Code',monospace;font-size:14px;resize:none;outline:none;";
-      ta.value = EXAMPLES.hello;
+      ta.value = exampleCode(EXAMPLES.hello);
       ta.addEventListener("keydown", (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
           e.preventDefault();
@@ -465,10 +510,14 @@ local extraGrafana = monitoring.grafana("dashboards");
     // ---------------------------------------------------------------
     // Example selector
     // ---------------------------------------------------------------
+    let activeExample = null; // tracks which example is loaded (for setup)
+
     document.getElementById("examples").addEventListener("change", (e) => {
-      const example = EXAMPLES[e.target.value];
+      const key = e.target.value;
+      const example = EXAMPLES[key];
       if (example) {
-        setCode(example);
+        setCode(exampleCode(example));
+        activeExample = example;
       }
       e.target.value = "";
     });
@@ -563,6 +612,13 @@ local extraGrafana = monitoring.grafana("dashboards");
           console.log(`Loaded ${libs.length} libraries: ${libs.map(l => l.name).join(", ")}`);
         }
 
+        // Expose vm to the browser console for interactive use:
+        //   vm.ext_var("name", "value")
+        //   vm.ext_code("name", "{ a: 1 }")
+        //   vm.add_file("lib.libsonnet", "{ ... }")
+        //   vm.evaluate_snippet("repl", "{ x: 1 }")
+        window.vm = vm;
+
         statusEl.textContent = "Ready";
         statusEl.className = "status ready";
         runBtn.disabled = false;
@@ -577,6 +633,11 @@ local extraGrafana = monitoring.grafana("dashboards");
 
     function evaluate() {
       if (!vm) return;
+
+      // Run per-example setup (e.g. ext_var / ext_code)
+      if (activeExample && typeof activeExample.setup === "function") {
+        activeExample.setup(vm);
+      }
 
       const code = getCode();
       const start = performance.now();
