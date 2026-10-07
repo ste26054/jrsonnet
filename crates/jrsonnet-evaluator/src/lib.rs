@@ -423,13 +423,14 @@ impl State {
 		drop(file_cache);
 		let (externals, thunks) = self.create_default_context(file_name).build();
 		let report = analyze_root(&parsed, externals);
-		if report.errored {
-			return Err(StaticAnalysisError(report.diagnostics_list).into());
-		}
-		debug_assert_eq!(report.root_shape.n_locals as usize, thunks.len());
-		debug_assert!(report.root_shape.captures.is_empty());
-		let ctx = Context::root(thunks);
-		let res = evaluate::evaluate(ctx, &report.lir);
+		let res = if report.errored {
+			Err(StaticAnalysisError(report.diagnostics_list).into())
+		} else {
+			debug_assert_eq!(report.root_shape.n_locals as usize, thunks.len());
+			debug_assert!(report.root_shape.captures.is_empty());
+			let ctx = Context::root(thunks);
+			evaluate::evaluate(ctx, &report.lir)
+		};
 
 		let mut file_cache = self.file_cache();
 		let mut file = file_cache.entry(path);
