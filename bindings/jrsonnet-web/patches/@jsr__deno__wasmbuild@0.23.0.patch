@@ -1,0 +1,10 @@
+diff --git a/lib/wasmbuild.js b/lib/wasmbuild.js
+index 6421d7081f19aa79460954344bf8fee7a41b70b5..9d168b19f7c379de055fb41bc040352fb79dc78c 100644
+--- a/lib/wasmbuild.js
++++ b/lib/wasmbuild.js
+@@ -9,4 +9,5 @@ import * as wasm from "./wasmbuild_bg.wasm";
+ export * from "./wasmbuild_bg.js";
+ import { __wbg_set_wasm } from "./wasmbuild_bg.js";
+ __wbg_set_wasm(wasm);
++wasm.__wbindgen_start();
+ 

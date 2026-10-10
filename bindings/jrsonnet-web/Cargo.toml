@@ -33,7 +33,6 @@ exp-null-coaelse = ["jrsonnet-stdlib/exp-null-coaelse"]
 
 [dependencies]
 console_error_panic_hook.workspace = true
-getrandom = { workspace = true, features = ["wasm_js"] }
 hi-doc.workspace = true
 jrsonnet-evaluator.workspace = true
 jrsonnet-formatter.workspace = true

@@ -45,7 +45,7 @@ jrsonnet-gcmodule = { version = "0.5.0" }
 # I'm against using miette, because I want to reuse data between interpreter and annotations, yet miette
 #   and other libraries want to handle spans etc by itself, which is okay for compiler diagnostics, but is
 #   bad for interpreter, where interpreter and parser are paired much closer.
-hi-doc = { version = "0.3.0", default-features = false }
+hi-doc = { version = "0.4.0", default-features = false }
 
 # CLI
 clap = "4.5"
@@ -54,7 +54,7 @@ clap_complete = "4.5"
 # Parsing, manifestification is implemented manually everywhere
 serde = "1.0.228"
 serde_json = "1.0.149"
-serde-saphyr = { version = "0.0.29", default-features = false, features = [
+serde-saphyr = { version = "1.3.0", default-features = false, features = [
   "deserialize",
 ] }
 
@@ -63,12 +63,12 @@ anyhow = "1.0.101"
 thiserror = "2.0.18"
 
 # Code formatting
-dprint-core = "0.68.2"
+dprint-core = "0.70.0"
 
 # Evaluator
 stacker = "0.1.23"
-smallvec = "1.15.1"
-educe = { version = "0.7.4", default-features = false }
+smallvec = "1.16.3"
+educe = { version = "0.8.1", default-features = false }
 url = "2.5.8"
 rustversion = "1.0.22"
 
@@ -85,7 +85,7 @@ hex = "0.4.3"
 peg = "0.8.5"
 logos = "0.16.1"
 ungrammar = "1.16.1"
-rowan = "0.16.1"
+rowan = "0.17.0"
 
 mimalloc = { version = "0.1.52", default-features = false, features = ["v2"] }
 indoc = "2.0"
@@ -121,7 +121,6 @@ wasm-bindgen = "=0.2.108"
 wasm-bindgen-futures = "0.4.56"
 js-sys = "0.3.85"
 console_error_panic_hook = "0.1"
-getrandom = "0.4.3"
 
 # Bundler
 tracing = "0.1.44"
@@ -129,9 +128,9 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 reqwest = { version = "0.13", default-features = false, features = [
   "blocking",
 ] }
-zip = { version = "8", default-features = false, features = ["deflate"] }
-directories = "6.0.0"
-gix = { version = "0.86.0", features = ["blocking-network-client"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
+directories = "6"
+gix = { version = "0.89.0", features = ["blocking-network-client"] }
 camino = { version = "1.2.2", features = ["serde1"] }
 rustls = { version = "0.23", default-features = false }
 

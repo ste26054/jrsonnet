@@ -1,0 +1,36 @@
+{
+	"name": "@deltarocks/jrsonnet",
+	"license": "MIT",
+	"version": "0.5.0-pre99",
+	"scripts": {
+		"wasmbuild:normal": "deno run -A scripts/build.ts -p jrsonnet-web --skip-opt",
+		"wasmbuild:experimental": "deno task wasmbuild:normal --out lib-exp --features experimental",
+		"wasmbuild": "deno task wasmbuild:normal && deno task wasmbuild:experimental",
+		"prepack": "deno task wasmbuild && pnpm-prepare"
+	},
+	"dependencies": {
+		"@std/assert": "jsr:^1.0.19"
+	},
+	"exports": {
+		".": "./mod.ts",
+		"./fmt": "./fmt.ts",
+		"./experimental": "./experimental.ts"
+	},
+	"publish": {
+		"exclude": [
+			"!lib"
+		]
+	},
+	"fmt": {
+		"useTabs": true
+	},
+	"devDependencies": {
+		"@deno/wasmbuild": "jsr:^0.23.0",
+		"pnpm-prepare": "link:../../../../contrib/pnpm-prepare",
+		"typescript": "^7.0.2"
+	},
+	"publishConfig": {
+		"directory": "dist",
+		"linkDirectory": false
+	}
+}

@@ -498,36 +498,8 @@ pub enum Error {
 	Io(PathBuf, std::io::Error),
 	#[error("failed to discover xdg directories")]
 	XdgUnavailable,
-	#[error("git clone failed: {0}")]
-	GitClone(#[from] gix::clone::Error),
-	#[error(transparent)]
-	GitRemote(#[from] gix::remote::init::Error),
-	#[error(transparent)]
-	GitConnect(#[from] gix::remote::connect::Error),
-	#[error(transparent)]
-	GitFetchPrepare(#[from] gix::remote::fetch::prepare::Error),
-	#[error(transparent)]
-	GitRemoteFetch(#[from] gix::remote::fetch::Error),
-	#[error(transparent)]
-	GitCloneFetch(#[from] gix::clone::fetch::Error),
-	#[error(transparent)]
-	GitFindObject(#[from] gix::object::find::existing::Error),
-	#[error(transparent)]
-	GitTraverse(#[from] gix::traverse::tree::breadthfirst::Error),
-	#[error(transparent)]
-	GitHead(#[from] gix::reference::head_id::Error),
-	#[error(transparent)]
-	GitCommit(#[from] gix::object::commit::Error),
-	#[error(transparent)]
-	GitRevparse(#[from] gix::revision::spec::parse::single::Error),
-	#[error(transparent)]
-	GitRefspec(#[from] gix::refspec::parse::Error),
-	#[error(transparent)]
-	GitPeel(#[from] gix::reference::peel::Error),
-	#[error(transparent)]
-	GitPeelToKind(#[from] gix::object::peel::to_kind::Error),
-	#[error(transparent)]
-	GitOpen(#[from] gix::open::Error),
+	#[error("git error: {0}")]
+	Git(#[from] gix::Error),
 	#[error("http error: {0}")]
 	Http(#[from] reqwest::Error),
 	#[error("zip error: {0}")]

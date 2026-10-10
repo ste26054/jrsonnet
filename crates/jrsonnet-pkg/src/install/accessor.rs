@@ -37,10 +37,11 @@ pub struct ZipFileAccessor {
 impl ZipFileAccessor {
 	pub fn new_prefixed(file: File) -> Result<Self> {
 		let archive = ZipArchive::new(file)?;
-		let prefix = archive.name_for_index(0).ok_or(Error::ZipInvalidPrefix)?;
+		let prefix = archive.name_for_index(0).ok_or(Error::ZipInvalidPrefix)??;
+		let prefix = SubDir::from_str(&prefix)?;
 
 		Ok(Self {
-			prefix: SubDir::from_str(prefix)?,
+			prefix,
 			archive: Mutex::new(archive),
 		})
 	}
@@ -84,8 +85,8 @@ impl ZipFileAccessor {
 		let mut found = false;
 		for i in 0..len {
 			let mut entry = archive.by_index(i).map_err(Error::from)?;
-			let raw = entry.name();
-			let Ok(full_name) = SubDir::from_str(raw) else {
+			let raw = entry.name().map_err(Error::from)?;
+			let Ok(full_name) = SubDir::from_str(&raw) else {
 				warn!("invalid zip entry name: {raw}");
 				continue;
 			};

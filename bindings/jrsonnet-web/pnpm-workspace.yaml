@@ -1,0 +1,4 @@
+overrides:
+  pnpm-prepare: link:../../../../contrib/pnpm-prepare
+patchedDependencies:
+  '@jsr/deno__wasmbuild@0.23.0': patches/@jsr__deno__wasmbuild@0.23.0.patch
