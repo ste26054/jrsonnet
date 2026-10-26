@@ -45,10 +45,10 @@ pub fn set_error_factory(f: js_sys::Function) {
 /// Frees the values that only reference cycles keep alive, and returns how
 /// many objects were freed.
 ///
-/// jrsonnet values reference each other in cycles, and the cycle collector
-/// does not run by itself. A program that evaluates more than once must call
+/// jrsonnet values can reference each other in cycles, and the cycle collector
+/// does not run by itself. A program that evaluates more than once should call
 /// this between evaluations, after `free()` on the states and values it no
-/// longer uses. Otherwise each state stays in memory.
+/// longer uses. Otherwise the unreachable cycles stay in memory.
 #[wasm_bindgen(js_name = collectGarbage)]
 pub fn collect_garbage() -> usize {
 	jrsonnet_gcmodule::collect_thread_cycles()
